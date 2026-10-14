@@ -72,9 +72,12 @@ void drawRoll(bool shakeStyle) {
 }  // namespace
 
 void setup() {
+  Serial.begin(115200);
   auto config = M5.config();
   M5.begin(config);
-  M5.Display.setRotation(1);
+  M5.Display.setRotation(3);
+  M5.Display.setBrightness(90);
+  M5.Power.setExtOutput(false);
   multiplayer.begin();
   drawIdle();
 }
