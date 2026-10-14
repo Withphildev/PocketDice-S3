@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c1020" />
+    <title>PocketDice</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">M5StickS3 tabletop</p>
+          <h1>PocketDice</h1>
+        </div>
+        <div class="connection"><span class="status-dot"></span><span id="connectionLabel">Demo session</span></div>
+      </header>
+
+      <section class="players" id="players" aria-label="Players"></section>
+
+      <section class="dice-board" id="diceBoard" aria-live="polite">
+        <div class="turn-label"><span id="turnName">Aria's turn</span><span id="formulaLabel">1d20</span></div>
+        <div class="result-stage">
+          <div class="die" id="die"><span id="result">20</span></div>
+          <div class="total-copy">
+            <span>Final total</span>
+            <strong id="total">20</strong>
+            <small id="breakdown">20 + 0</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="dice-picker" aria-label="Dice type">
+        <button data-sides="4">d4</button><button data-sides="6">d6</button>
+        <button data-sides="8">d8</button><button data-sides="10">d10</button>
+        <button data-sides="12">d12</button><button class="selected" data-sides="20">d20</button>
+        <button data-sides="100">d100</button>
+      </section>
+
+      <section>
+        <div class="section-heading"><div><p class="eyebrow">Build the roll</p><h2>Actions & power-ups</h2></div><button class="text-button" id="clearModifiers">Clear</button></div>
+        <div class="actions" id="actions"></div>
+      </section>
+
+      <section class="roll-tray">
+        <div><span>Selected bonus</span><strong id="modifierTotal">+0</strong></div>
+        <button class="roll-button" id="rollButton">Roll <span id="rollFormula">1d20</span></button>
+      </section>
+
+      <details class="theme-panel">
+        <summary>Dungeon skins</summary>
+        <p>Import a small PocketDice theme JSON file. The device will validate it before saving.</p>
+        <input type="file" id="themeInput" accept="application/json,.json" />
+      </details>
+    </main>
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>
+

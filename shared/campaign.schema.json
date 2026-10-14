@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pocketdice.local/schemas/campaign.schema.json",
+  "title": "PocketDice campaign",
+  "type": "object",
+  "required": ["version", "name", "actions"],
+  "properties": {
+    "version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "themeId": { "type": "string", "pattern": "^[a-z0-9-]{1,32}$" },
+    "actions": {
+      "type": "array",
+      "maxItems": 24,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "value"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]{1,32}$" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 32 },
+          "detail": { "type": "string", "maxLength": 48 },
+          "value": { "type": "integer", "minimum": -999, "maximum": 999 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

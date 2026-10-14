@@ -1,0 +1,7 @@
+{
+  "name": "PocketDiceCore",
+  "version": "0.1.0",
+  "description": "Hardware-independent dice, modifier, and multiplayer session logic",
+  "build": { "srcDir": "src" }
+}
+

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pocketdice.local/schemas/protocol.schema.json",
+  "title": "PocketDice realtime message",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["type", "revision", "session"],
+      "properties": {
+        "type": { "const": "session.snapshot" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "session": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "commandId", "formula"],
+      "properties": {
+        "type": { "const": "roll.request" },
+        "commandId": { "type": "string", "minLength": 8, "maxLength": 64 },
+        "formula": { "type": "string", "pattern": "^[0-9]*[dD][0-9]+([+-][0-9]+)?$" },
+        "modifierIds": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "type": "string", "maxLength": 32 }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "revision", "result"],
+      "properties": {
+        "type": { "const": "roll.result" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "result": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  ]
+}
+

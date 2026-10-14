@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pocketdice.local/schemas/theme.schema.json",
+  "title": "PocketDice dungeon theme",
+  "type": "object",
+  "required": ["id", "name", "colors"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9-]{1,32}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "colors": {
+      "type": "object",
+      "required": ["background", "panel", "accent", "text"],
+      "properties": {
+        "background": { "$ref": "#/$defs/color" },
+        "panel": { "$ref": "#/$defs/color" },
+        "accent": { "$ref": "#/$defs/color" },
+        "text": { "$ref": "#/$defs/color" }
+      },
+      "additionalProperties": false
+    },
+    "backgroundAsset": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{1,64}$" }
+  },
+  "$defs": { "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } },
+  "additionalProperties": false
+}
+
