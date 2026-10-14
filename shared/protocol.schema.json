@@ -1,15 +1,47 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pocketdice.local/schemas/protocol.schema.json",
-  "title": "PocketDice realtime message",
+  "title": "PocketDice WebSocket message",
   "oneOf": [
+    {
+      "type": "object",
+      "required": ["type", "revision", "maxPlayers"],
+      "properties": {
+        "type": { "const": "server.hello" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "maxPlayers": { "const": 6 }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "player.join" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 23, "pattern": "^[A-Za-z0-9 _-]+$" },
+        "reconnectToken": { "$ref": "#/$defs/token" }
+      },
+      "anyOf": [{ "required": ["name"] }, { "required": ["reconnectToken"] }],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "playerId", "reconnectToken", "reconnected"],
+      "properties": {
+        "type": { "const": "player.welcome" },
+        "playerId": { "type": "integer", "minimum": 1 },
+        "reconnectToken": { "$ref": "#/$defs/token" },
+        "reconnected": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     {
       "type": "object",
       "required": ["type", "revision", "session"],
       "properties": {
         "type": { "const": "session.snapshot" },
         "revision": { "type": "integer", "minimum": 0 },
-        "session": { "type": "object" }
+        "session": { "$ref": "#/$defs/session" }
       },
       "additionalProperties": false
     },
@@ -23,9 +55,16 @@
         "modifierIds": {
           "type": "array",
           "maxItems": 8,
-          "items": { "type": "string", "maxLength": 32 }
+          "uniqueItems": true,
+          "items": { "enum": ["weapon", "power", "blessing", "wound"] }
         }
       },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": { "type": { "const": "turn.advance" } },
       "additionalProperties": false
     },
     {
@@ -34,10 +73,55 @@
       "properties": {
         "type": { "const": "roll.result" },
         "revision": { "type": "integer", "minimum": 1 },
-        "result": { "type": "object" }
+        "result": { "$ref": "#/$defs/roll" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "code", "message"],
+      "properties": {
+        "type": { "const": "error" },
+        "code": { "type": "string", "maxLength": 40 },
+        "message": { "type": "string", "maxLength": 160 }
       },
       "additionalProperties": false
     }
-  ]
+  ],
+  "$defs": {
+    "token": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "player": {
+      "type": "object",
+      "required": ["id", "name", "connected"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 23 },
+        "connected": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "roll": {
+      "type": "object",
+      "required": ["sides", "naturalTotal", "modifierTotal", "total"],
+      "properties": {
+        "sides": { "type": "integer", "minimum": 2, "maximum": 1000 },
+        "dice": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "integer", "minimum": 1 } },
+        "naturalTotal": { "type": "integer" },
+        "modifierTotal": { "type": "integer", "minimum": -999, "maximum": 999 },
+        "total": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "required": ["activePlayerId", "hostPlayerId", "players"],
+      "properties": {
+        "activePlayerId": { "type": "integer", "minimum": 0 },
+        "hostPlayerId": { "type": "integer", "minimum": 0 },
+        "players": { "type": "array", "maxItems": 6, "items": { "$ref": "#/$defs/player" } },
+        "lastRoll": { "$ref": "#/$defs/roll" }
+      },
+      "additionalProperties": false
+    }
+  }
 }
-

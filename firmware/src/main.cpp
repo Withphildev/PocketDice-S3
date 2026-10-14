@@ -2,6 +2,7 @@
 #include <M5Unified.h>
 
 #include "PocketDiceCore.h"
+#include "MultiplayerServer.h"
 
 using namespace pocketdice;
 
@@ -21,7 +22,7 @@ class EspRandom final : public RandomSource {
 };
 
 EspRandom randomSource;
-RollSpec selectedDie{1, 20, 0};
+MultiplayerServer multiplayer(randomSource);
 RollResult lastRoll{};
 
 void drawIdle() {
@@ -32,24 +33,29 @@ void drawIdle() {
   M5.Display.drawString("PocketDice", M5.Display.width() / 2, 24);
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
   M5.Display.setTextSize(1);
-  M5.Display.drawString("Face: Roll", M5.Display.width() / 2, 55);
-  M5.Display.drawString("M5: Shake Roll", M5.Display.width() / 2, 72);
+  M5.Display.drawString(multiplayer.ssid(), M5.Display.width() / 2, 48);
+  M5.Display.drawString(multiplayer.address().toString(), M5.Display.width() / 2, 62);
+  M5.Display.drawString("Face: Roll  M5: Shake", M5.Display.width() / 2, 78);
+}
+
+void animateShake(const RollSpec& spec) {
+  for (int frame = 0; frame < 7; ++frame) {
+    M5.Display.fillScreen(frame % 2 == 0 ? TFT_NAVY : TFT_DARKGREY);
+    M5.Display.setTextColor(TFT_WHITE);
+    M5.Display.setTextDatum(middle_center);
+    M5.Display.setTextSize(3);
+    M5.Display.drawNumber(static_cast<int>(randomSource.uniform(spec.sides) + 1),
+                          M5.Display.width() / 2 + ((frame % 3) - 1) * 3,
+                          M5.Display.height() / 2);
+    delay(45);
+  }
 }
 
 void drawRoll(bool shakeStyle) {
-  if (!DiceEngine::roll(selectedDie, randomSource, lastRoll)) return;
   if (shakeStyle) {
-    for (int frame = 0; frame < 7; ++frame) {
-      M5.Display.fillScreen(frame % 2 == 0 ? TFT_NAVY : TFT_DARKGREY);
-      M5.Display.setTextColor(TFT_WHITE);
-      M5.Display.setTextDatum(middle_center);
-      M5.Display.setTextSize(3);
-      M5.Display.drawNumber(static_cast<int>(randomSource.uniform(selectedDie.sides) + 1),
-                            M5.Display.width() / 2 + ((frame % 3) - 1) * 3,
-                            M5.Display.height() / 2);
-      delay(45);
-    }
+    animateShake(multiplayer.currentSpec());
   }
+  if (!multiplayer.rollFromDevice(lastRoll)) return;
   M5.Display.fillScreen(TFT_BLACK);
   M5.Display.setTextDatum(middle_center);
   M5.Display.setTextColor(TFT_YELLOW, TFT_BLACK);
@@ -57,7 +63,10 @@ void drawRoll(bool shakeStyle) {
   M5.Display.drawNumber(lastRoll.total, M5.Display.width() / 2, M5.Display.height() / 2);
   M5.Display.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   M5.Display.setTextSize(1);
-  M5.Display.drawString("d20", M5.Display.width() / 2, M5.Display.height() - 12);
+  String formula = String(lastRoll.spec.count) + "d" + String(lastRoll.spec.sides);
+  if (lastRoll.spec.modifier > 0) formula += "+";
+  if (lastRoll.spec.modifier != 0) formula += String(lastRoll.spec.modifier);
+  M5.Display.drawString(formula, M5.Display.width() / 2, M5.Display.height() - 12);
 }
 
 }  // namespace
@@ -66,6 +75,7 @@ void setup() {
   auto config = M5.config();
   M5.begin(config);
   M5.Display.setRotation(1);
+  multiplayer.begin();
   drawIdle();
 }
 
@@ -78,6 +88,7 @@ void loop() {
   // The top M5 button is BtnB on M5StickS3.
   if (M5.BtnB.wasPressed()) drawRoll(true);
 
+  multiplayer.tick();
   delay(10);
 }
 

@@ -14,7 +14,10 @@
           <p class="eyebrow">M5StickS3 tabletop</p>
           <h1>PocketDice</h1>
         </div>
-        <div class="connection"><span class="status-dot"></span><span id="connectionLabel">Demo session</span></div>
+        <div class="header-tools">
+          <button class="text-button" id="nextTurn" hidden>Next turn</button>
+          <div class="connection"><span class="status-dot"></span><span id="connectionLabel">Connecting…</span></div>
+        </div>
       </header>
 
       <section class="players" id="players" aria-label="Players"></section>
@@ -45,7 +48,7 @@
 
       <section class="roll-tray">
         <div><span>Selected bonus</span><strong id="modifierTotal">+0</strong></div>
-        <button class="roll-button" id="rollButton">Roll <span id="rollFormula">1d20</span></button>
+        <button class="roll-button" id="rollButton" disabled>Roll <span id="rollFormula">1d20</span></button>
       </section>
 
       <details class="theme-panel">
@@ -54,6 +57,17 @@
         <input type="file" id="themeInput" accept="application/json,.json" />
       </details>
     </main>
+    <dialog class="join-dialog" id="joinDialog">
+      <form method="dialog" id="joinForm">
+        <p class="eyebrow">Join this table</p>
+        <h2>Choose your player name</h2>
+        <p>Your browser will remember this seat so you can reconnect during the dungeon.</p>
+        <label for="playerName">Player name</label>
+        <input id="playerName" name="playerName" maxlength="23" pattern="[A-Za-z0-9 _-]+" autocomplete="nickname" required />
+        <button class="roll-button" type="submit">Join PocketDice</button>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
     <script type="module" src="src/app.js"></script>
   </body>
 </html>

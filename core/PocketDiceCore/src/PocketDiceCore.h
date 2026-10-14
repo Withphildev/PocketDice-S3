@@ -79,6 +79,8 @@ class SessionState {
 
   std::size_t playerCount() const { return playerCount_; }
   const Player& player(std::size_t index) const { return players_[index]; }
+  const Player* playerById(std::uint32_t id) const;
+  const Player* playerByToken(const char* reconnectToken) const;
   std::uint32_t activePlayerId() const { return activePlayerId_; }
   std::uint32_t revision() const { return revision_; }
   const RollResult& lastRoll() const { return lastRoll_; }

@@ -4,16 +4,18 @@ PocketDice-S3 turns an M5StickS3 into a pocket tabletop dice console and a local
 
 This is an original project for the Pocket S3 family. It borrows product lessons—not source code or artwork—from other dice tools.
 
-## First milestone
+## Current milestone
 
 - Hardware-independent C++ dice engine with `d4`, `d6`, `d8`, `d10`, `d12`, `d20`, `d100`, custom dice counts, and flat modifiers.
 - Six-player turn/session model with revision numbers and duplicate-command rejection.
 - M5StickS3 controls: blue face button rolls immediately; top M5 button plays a shake-roll animation.
 - Responsive WebUI prototype with an active-player highlight, action/power-up cards, combined totals, and dungeon-theme JSON import.
+- Open `PocketDice-XXXX` SoftAP with captive-portal discovery and room for eight Wi-Fi stations.
+- Realtime WebSocket table for six player seats, browser reconnect tokens, authoritative rolls, and host-controlled turns.
 - Versioned JSON schemas for realtime messages and themes.
 - Host-side tests that do not require the device.
 
-The firmware currently boots into the local dice screen. Wi-Fi AP, captive portal, WebSocket transport, persistence, and validated theme uploads are the next device-integration milestone; their contracts and boundaries are documented now so the core does not need to be rewritten.
+The firmware and LittleFS WebUI both compile for the M5StickS3. Durable session persistence and validated theme uploads are the next device-integration milestone.
 
 ## Repository map
 
@@ -39,9 +41,19 @@ Install [PlatformIO](https://platformio.org/), then run:
 
 ```bash
 pio run
+pio run -t buildfs
 ```
 
-The partition map targets the M5StickS3's 8 MB flash and keeps application, durable state, and uploaded theme assets separate.
+Upload the firmware and WebUI filesystem with:
+
+```bash
+pio run -t upload
+pio run -t uploadfs
+```
+
+The partition map targets the M5StickS3's 8 MB flash and keeps application, WebUI, durable state, and uploaded theme assets separate.
+
+After boot, join the SSID shown on the device (`PocketDice-XXXX`) and open `http://192.168.4.1/` if the captive portal does not appear automatically. The first player becomes the host and receives the **Next turn** control.
 
 ## Preview the WebUI
 
@@ -51,7 +63,7 @@ Serve the repository root (opening the page through HTTP allows the reconnect be
 python3 -m http.server 8080
 ```
 
-Then open `http://localhost:8080/web/`. Until it reaches a PocketDice WebSocket server, the interface works in local demo mode.
+Then open `http://localhost:8080/web/?demo=1`. Demo mode exercises the dice and modifier interface without a device.
 
 ## Product rules
 

@@ -1,6 +1,11 @@
 .pio/
+.venv/
 .DS_Store
+__pycache__/
+*.pyc
 build/
+data/*
+!data/.gitkeep
 *.bin
 *.elf
 *.map

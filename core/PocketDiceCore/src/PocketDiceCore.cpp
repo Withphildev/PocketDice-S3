@@ -120,6 +120,19 @@ int SessionState::findPlayer(std::uint32_t id) const {
   return -1;
 }
 
+const Player* SessionState::playerById(std::uint32_t id) const {
+  const int index = findPlayer(id);
+  return index < 0 ? nullptr : &players_[index];
+}
+
+const Player* SessionState::playerByToken(const char* reconnectToken) const {
+  if (reconnectToken == nullptr || reconnectToken[0] == '\0') return nullptr;
+  for (std::size_t index = 0; index < playerCount_; ++index) {
+    if (std::strcmp(players_[index].reconnectToken, reconnectToken) == 0) return &players_[index];
+  }
+  return nullptr;
+}
+
 bool SessionState::addPlayer(std::uint32_t id, const char* name, const char* reconnectToken) {
   if (id == 0 || findPlayer(id) >= 0 || playerCount_ >= kMaxPlayers) return false;
   auto& next = players_[playerCount_++];

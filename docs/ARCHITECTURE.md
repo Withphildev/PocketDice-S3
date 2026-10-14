@@ -23,14 +23,14 @@ HTTP serves the WebUI, current session snapshot, and upload endpoints. WebSocket
 ## Multiplayer protocol
 
 1. A player joins the `PocketDice-XXXX` AP and the captive portal opens `/`.
-2. `player.join` returns a numeric player ID and opaque reconnect token. The token is stored only in that browser and as a hash on-device.
+2. `player.join` returns a numeric player ID and opaque reconnect token. The browser stores it in local storage; the current in-memory firmware session uses it to reclaim the seat. Durable storage will hash tokens before writing them to flash.
 3. The server sends `session.snapshot` with revision `N`.
 4. The active player sends `roll.request` with a UUID command ID, formula, and selected modifier IDs.
 5. The server validates turn ownership, command uniqueness, formula bounds, and referenced actions.
 6. The device rolls, commits revision `N+1`, and broadcasts one `roll.result` to every client.
 7. A reconnect presents its token and receives the newest snapshot. Events at or below the browser's revision are ignored.
 
-The access point should explicitly request eight stations: six players plus headroom for the host and development. Session seats remain capped at six.
+The access point explicitly requests eight stations: six players plus headroom for a host display and development. Session seats remain capped at six.
 
 ## Physical controls
 

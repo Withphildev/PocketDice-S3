@@ -54,6 +54,10 @@ void testSession() {
   assert(session.addPlayer(2, "Bram", "token-b"));
   assert(!session.addPlayer(2, "Duplicate", "token-c"));
   assert(session.activePlayerId() == 1);
+  assert(session.playerById(2) != nullptr);
+  assert(session.playerByToken("token-b") != nullptr);
+  assert(session.playerByToken("") == nullptr);
+  assert(session.playerByToken("missing") == nullptr);
   assert(session.advanceTurn() && session.activePlayerId() == 2);
   assert(session.acceptCommand(42));
   assert(!session.acceptCommand(42));

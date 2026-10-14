@@ -7,12 +7,12 @@
 - Face-button and M5-button rolling on-device.
 - Multiplayer WebUI shell and shared schemas.
 
-## 0.2 — Connected table
+## 0.2 — Connected table (implemented)
 
-- SoftAP with an explicit eight-station allowance and captive portal.
-- LittleFS-hosted WebUI and WebSocket endpoint.
-- Join/reconnect flow, host role, active-turn enforcement, and live broadcasts.
-- Browser/device integration tests for stale revisions and duplicate commands.
+- SoftAP with an explicit eight-station allowance and captive portal. ✓
+- LittleFS-hosted WebUI and WebSocket endpoint. ✓
+- Join/reconnect flow, host role, active-turn enforcement, and live broadcasts. ✓
+- Browser/device integration tests for stale revisions and duplicate commands. Next hardware-validation task.
 
 ## 0.3 — Dungeon kits
 
