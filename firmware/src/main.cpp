@@ -73,13 +73,33 @@ void drawRoll(bool shakeStyle) {
 
 void setup() {
   Serial.begin(115200);
+  delay(250);
+  Serial.println("[PocketDice] boot");
+
   auto config = M5.config();
+  config.serial_baudrate = 115200;
   M5.begin(config);
+  Serial.printf("[PocketDice] M5 board=%d displays=%u\n", static_cast<int>(M5.getBoard()),
+                static_cast<unsigned>(M5.getDisplayCount()));
+
   M5.Display.setRotation(3);
   M5.Display.setBrightness(90);
+  M5.Display.fillScreen(TFT_NAVY);
+  M5.Display.setTextDatum(middle_center);
+  M5.Display.setTextColor(TFT_WHITE, TFT_NAVY);
+  M5.Display.setTextSize(2);
+  M5.Display.drawString("PocketDice", M5.Display.width() / 2, M5.Display.height() / 2 - 10);
+  M5.Display.setTextSize(1);
+  M5.Display.drawString("Starting...", M5.Display.width() / 2, M5.Display.height() / 2 + 14);
+  Serial.printf("[PocketDice] display=%dx%d\n", M5.Display.width(), M5.Display.height());
+
   M5.Power.setExtOutput(false);
-  multiplayer.begin();
+  Serial.println("[PocketDice] starting multiplayer services");
+  const bool accessPointReady = multiplayer.begin();
+  Serial.printf("[PocketDice] AP=%s SSID=%s IP=%s\n", accessPointReady ? "ready" : "failed",
+                multiplayer.ssid().c_str(), multiplayer.address().toString().c_str());
   drawIdle();
+  Serial.println("[PocketDice] ready");
 }
 
 void loop() {
