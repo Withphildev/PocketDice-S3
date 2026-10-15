@@ -56,14 +56,14 @@ function mixColor(hex, amount) {
   return `rgb(${channel(0)},${channel(2)},${channel(4)})`;
 }
 
-function polygon(context, points, fill, stroke = "#ffffff55") {
+function polygon(context, points, fill, stroke = "#ffffff55", width = 3) {
   context.beginPath();
   points.forEach(([x, y], index) => index ? context.lineTo(x, y) : context.moveTo(x, y));
   context.closePath();
   context.fillStyle = fill;
   context.fill();
   context.strokeStyle = stroke;
-  context.lineWidth = 3;
+  context.lineWidth = width;
   context.stroke();
 }
 
@@ -74,36 +74,113 @@ function ringPoints(cx, cy, radius, count, angle, yScale = 1) {
   });
 }
 
-function drawD20(context, cx, cy, radius, angle, light, mid, dark) {
-  const phi = (1 + Math.sqrt(5)) / 2;
-  const vertices = [
-    [-1, phi, 0], [1, phi, 0], [-1, -phi, 0], [1, -phi, 0],
-    [0, -1, phi], [0, 1, phi], [0, -1, -phi], [0, 1, -phi],
-    [phi, 0, -1], [phi, 0, 1], [-phi, 0, -1], [-phi, 0, 1],
-  ];
-  const faces = [
+const phi = (1 + Math.sqrt(5)) / 2;
+const icoVertices = [
+  [-1, phi, 0], [1, phi, 0], [-1, -phi, 0], [1, -phi, 0],
+  [0, -1, phi], [0, 1, phi], [0, -1, -phi], [0, 1, -phi],
+  [phi, 0, -1], [phi, 0, 1], [-phi, 0, -1], [-phi, 0, 1],
+];
+const icoFaces = [
     [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
     [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
     [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
     [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
-  ];
+];
+
+const vectorLength = ([x, y, z]) => Math.hypot(x, y, z);
+const normalize = (vector) => {
+  const length = vectorLength(vector);
+  return vector.map((component) => component / length);
+};
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+function makeDodecahedron() {
+  const vertices = icoFaces.map((face) => normalize(face.reduce((sum, vertexIndex) =>
+    sum.map((value, axis) => value + icoVertices[vertexIndex][axis]), [0, 0, 0])));
+  const faces = icoVertices.map((axis, vertexIndex) => {
+    const normal = normalize(axis);
+    const reference = normalize(cross(normal, Math.abs(normal[1]) < .9 ? [0, 1, 0] : [1, 0, 0]));
+    const tangent = cross(normal, reference);
+    return icoFaces.map((face, faceIndex) => face.includes(vertexIndex) ? faceIndex : -1)
+      .filter((faceIndex) => faceIndex >= 0)
+      .sort((a, b) => Math.atan2(dot(vertices[a], tangent), dot(vertices[a], reference)) -
+                      Math.atan2(dot(vertices[b], tangent), dot(vertices[b], reference)));
+  });
+  return { vertices, faces, radius: 1 };
+}
+
+function makeD100() {
+  const segments = 10;
+  const ringCount = 9;
+  const vertices = [[0, 1, 0]];
+  for (let ring = 0; ring < ringCount; ring++) {
+    const latitude = Math.PI * (ring + 1) / (ringCount + 1);
+    const ringRadius = Math.sin(latitude);
+    const y = Math.cos(latitude);
+    const phase = ring % 2 ? Math.PI / segments : 0;
+    for (let segment = 0; segment < segments; segment++) {
+      const longitude = phase + segment * Math.PI * 2 / segments;
+      vertices.push([Math.cos(longitude) * ringRadius, y, Math.sin(longitude) * ringRadius]);
+    }
+  }
+  const bottom = vertices.push([0, -1, 0]) - 1;
+  const faces = [];
+  for (let segment = 0; segment < segments; segment++) {
+    faces.push([0, 1 + segment, 1 + (segment + 1) % segments]);
+  }
+  for (let ring = 0; ring < ringCount - 1; ring++) {
+    const current = 1 + ring * segments;
+    const next = current + segments;
+    for (let segment = 0; segment < segments; segment++) {
+      faces.push([current + segment, next + segment, next + (segment + 1) % segments, current + (segment + 1) % segments]);
+    }
+  }
+  const lastRing = 1 + (ringCount - 1) * segments;
+  for (let segment = 0; segment < segments; segment++) {
+    faces.push([bottom, lastRing + (segment + 1) % segments, lastRing + segment]);
+  }
+  return { vertices, faces, radius: 1 };
+}
+
+const dieMeshes = {
+  4: {
+    vertices: [[1, 1, 1], [-1, -1, 1], [-1, 1, -1], [1, -1, -1]],
+    faces: [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]], radius: Math.sqrt(3),
+  },
+  6: {
+    vertices: [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]],
+    faces: [[0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [4, 0, 3, 7]], radius: Math.sqrt(3),
+  },
+  8: {
+    vertices: [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]],
+    faces: [[2, 0, 4], [2, 4, 1], [2, 1, 5], [2, 5, 0], [3, 4, 0], [3, 1, 4], [3, 5, 1], [3, 0, 5]], radius: 1,
+  },
+  12: makeDodecahedron(),
+  20: { vertices: icoVertices, faces: icoFaces, radius: Math.sqrt(1 + phi * phi) },
+  100: makeD100(),
+};
+
+function drawMesh(context, cx, cy, radius, angle, mesh, light, mid, dark) {
   const angleX = -.31 + Math.sin(angle * .6) * .12;
   const cosY = Math.cos(angle);
   const sinY = Math.sin(angle);
   const cosX = Math.cos(angleX);
   const sinX = Math.sin(angleX);
-  const scale = radius / 1.83;
-  const points = vertices.map(([x, y, z]) => {
+  const scale = radius / mesh.radius;
+  const points = mesh.vertices.map(([x, y, z]) => {
     const rotatedX = x * cosY + z * sinY;
     const rotatedZ = -x * sinY + z * cosY;
     const rotatedY = y * cosX - rotatedZ * sinX;
     return [cx + rotatedX * scale, cy + rotatedY * scale, y * sinX + rotatedZ * cosX];
   });
-  faces.map((face) => ({
+  const lineWidth = mesh.faces.length >= 80 ? 1 : mesh.faces.length >= 20 ? 2 : 3;
+  mesh.faces.map((face) => ({
     face,
     depth: face.reduce((sum, index) => sum + points[index][2], 0) / 3,
   })).sort((a, b) => a.depth - b.depth).forEach(({ face, depth }) => {
-    polygon(context, face.map((index) => points[index]), depth > .65 ? light : depth > -.2 ? mid : dark, "#d8ceff88");
+    const normalizedDepth = depth / mesh.radius;
+    polygon(context, face.map((index) => points[index]), normalizedDepth > .3 ? light : normalizedDepth > -.2 ? mid : dark, "#d8ceff88", lineWidth);
   });
 }
 
@@ -126,37 +203,10 @@ function drawDie(angle = diceAngle) {
   const mid = mixColor(accent, -14);
   const sides = state.lastRoll?.sides || state.sides;
 
-  if (sides === 6) {
-    const wobble = Math.sin(angle) * radius * .22;
-    const top = [cx, cy - radius];
-    const left = [cx - radius * .78, cy - radius * .42 + wobble];
-    const right = [cx + radius * .78, cy - radius * .42 - wobble];
-    const center = [cx, cy - radius * .02];
-    const bottomLeft = [cx - radius * .78, cy + radius * .55];
-    const bottomRight = [cx + radius * .78, cy + radius * .55];
-    polygon(context, [top, right, center, left], light);
-    polygon(context, [left, center, bottomRight, bottomLeft], mid);
-    polygon(context, [center, right, bottomRight], dark);
-  } else if (sides === 4) {
-    const points = ringPoints(cx, cy + radius * .12, radius, 3, angle - Math.PI / 2, .9);
-    const center = [cx + Math.sin(angle * 1.7) * radius * .15, cy + radius * .08];
-    polygon(context, [points[0], points[1], center], light);
-    polygon(context, [points[1], points[2], center], dark);
-    polygon(context, [points[2], points[0], center], mid);
-  } else if (sides === 20) {
-    drawD20(context, cx, cy, radius, angle, light, mid, dark);
-  } else if (sides === 100) {
-    const gradient = context.createRadialGradient(cx - radius * .35, cy - radius * .45, 4, cx, cy, radius);
-    gradient.addColorStop(0, light); gradient.addColorStop(.55, accent); gradient.addColorStop(1, dark);
-    context.beginPath(); context.arc(cx, cy, radius, 0, Math.PI * 2); context.fillStyle = gradient; context.fill();
-    context.strokeStyle = "#ffffff66"; context.lineWidth = 3; context.stroke();
-    for (let band = -2; band <= 2; band++) {
-      context.beginPath();
-      context.ellipse(cx, cy + band * radius * .26, radius * Math.cos(band * .24), radius * .16, angle * .15, 0, Math.PI * 2);
-      context.strokeStyle = "#ffffff2e"; context.stroke();
-    }
+  if (dieMeshes[sides]) {
+    drawMesh(context, cx, cy, radius, angle, dieMeshes[sides], light, mid, dark);
   } else {
-    const count = sides === 8 ? 4 : sides === 10 ? 5 : sides === 12 ? 6 : 5;
+    const count = 5;
     const equator = ringPoints(cx, cy, radius * .9, count, angle, .48);
     const top = [cx + Math.sin(angle * 1.3) * radius * .13, cy - radius];
     const bottom = [cx - Math.sin(angle * 1.3) * radius * .13, cy + radius];
