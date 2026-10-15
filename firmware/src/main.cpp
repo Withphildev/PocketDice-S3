@@ -25,6 +25,62 @@ EspRandom randomSource;
 MultiplayerServer multiplayer(randomSource);
 RollResult lastRoll{};
 
+void drawPolyDie(std::uint16_t sides, std::uint16_t value, int frame = 0) {
+  const int centerX = M5.Display.width() / 2 + ((frame % 3) - 1) * 2;
+  const int centerY = M5.Display.height() / 2 - 7 + ((frame % 2) ? -2 : 1);
+  const int radius = 38;
+  const std::uint16_t light = M5.Display.color565(133, 105, 255);
+  const std::uint16_t mid = M5.Display.color565(91, 63, 205);
+  const std::uint16_t dark = M5.Display.color565(45, 32, 116);
+
+  M5.Display.fillScreen(M5.Display.color565(6, 11, 25));
+  if (sides == 6) {
+    M5.Display.fillTriangle(centerX, centerY - radius, centerX - radius, centerY - 15,
+                            centerX, centerY, light);
+    M5.Display.fillTriangle(centerX, centerY - radius, centerX + radius, centerY - 15,
+                            centerX, centerY, light);
+    M5.Display.fillTriangle(centerX - radius, centerY - 15, centerX, centerY,
+                            centerX - radius, centerY + 25, mid);
+    M5.Display.fillTriangle(centerX - radius, centerY + 25, centerX, centerY,
+                            centerX, centerY + radius, mid);
+    M5.Display.fillTriangle(centerX + radius, centerY - 15, centerX + radius,
+                            centerY + 25, centerX, centerY, dark);
+    M5.Display.fillTriangle(centerX + radius, centerY + 25, centerX, centerY + radius,
+                            centerX, centerY, dark);
+  } else if (sides == 4) {
+    M5.Display.fillTriangle(centerX, centerY - radius, centerX - radius, centerY + radius,
+                            centerX, centerY + 5, light);
+    M5.Display.fillTriangle(centerX, centerY - radius, centerX + radius, centerY + radius,
+                            centerX, centerY + 5, mid);
+    M5.Display.fillTriangle(centerX - radius, centerY + radius, centerX + radius,
+                            centerY + radius, centerX, centerY + 5, dark);
+  } else if (sides == 100) {
+    M5.Display.fillCircle(centerX, centerY, radius, mid);
+    M5.Display.fillCircle(centerX - 11, centerY - 13, radius / 3, light);
+    M5.Display.drawCircle(centerX, centerY, radius, TFT_WHITE);
+    M5.Display.drawEllipse(centerX, centerY, radius, radius / 3, dark);
+    M5.Display.drawLine(centerX, centerY - radius, centerX, centerY + radius, dark);
+  } else {
+    M5.Display.fillTriangle(centerX, centerY - radius, centerX - radius, centerY,
+                            centerX, centerY, light);
+    M5.Display.fillTriangle(centerX, centerY - radius, centerX + radius, centerY,
+                            centerX, centerY, mid);
+    M5.Display.fillTriangle(centerX - radius, centerY, centerX, centerY + radius,
+                            centerX, centerY, mid);
+    M5.Display.fillTriangle(centerX + radius, centerY, centerX, centerY + radius,
+                            centerX, centerY, dark);
+    M5.Display.drawLine(centerX - radius, centerY, centerX + radius, centerY, TFT_WHITE);
+  }
+
+  M5.Display.setTextDatum(middle_center);
+  M5.Display.setTextColor(TFT_WHITE);
+  M5.Display.setTextSize(value >= 100 ? 2 : 3);
+  M5.Display.drawNumber(value, centerX, centerY);
+  M5.Display.setTextSize(1);
+  M5.Display.setTextColor(TFT_LIGHTGREY);
+  M5.Display.drawString(String("d") + sides, centerX, M5.Display.height() - 8);
+}
+
 void drawIdle() {
   M5.Display.fillScreen(TFT_BLACK);
   M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
@@ -39,15 +95,10 @@ void drawIdle() {
 }
 
 void animateShake(const RollSpec& spec) {
-  for (int frame = 0; frame < 7; ++frame) {
-    M5.Display.fillScreen(frame % 2 == 0 ? TFT_NAVY : TFT_DARKGREY);
-    M5.Display.setTextColor(TFT_WHITE);
-    M5.Display.setTextDatum(middle_center);
-    M5.Display.setTextSize(3);
-    M5.Display.drawNumber(static_cast<int>(randomSource.uniform(spec.sides) + 1),
-                          M5.Display.width() / 2 + ((frame % 3) - 1) * 3,
-                          M5.Display.height() / 2);
-    delay(45);
+  for (int frame = 0; frame < 8; ++frame) {
+    drawPolyDie(spec.sides, static_cast<std::uint16_t>(randomSource.uniform(spec.sides) + 1),
+                frame);
+    delay(55);
   }
 }
 
@@ -56,17 +107,14 @@ void drawRoll(bool shakeStyle) {
     animateShake(multiplayer.currentSpec());
   }
   if (!multiplayer.rollFromDevice(lastRoll)) return;
-  M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextDatum(middle_center);
-  M5.Display.setTextColor(TFT_YELLOW, TFT_BLACK);
-  M5.Display.setTextSize(5);
-  M5.Display.drawNumber(lastRoll.total, M5.Display.width() / 2, M5.Display.height() / 2);
-  M5.Display.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-  M5.Display.setTextSize(1);
-  String formula = String(lastRoll.spec.count) + "d" + String(lastRoll.spec.sides);
-  if (lastRoll.spec.modifier > 0) formula += "+";
-  if (lastRoll.spec.modifier != 0) formula += String(lastRoll.spec.modifier);
-  M5.Display.drawString(formula, M5.Display.width() / 2, M5.Display.height() - 12);
+  drawPolyDie(lastRoll.spec.sides, lastRoll.diceCount ? lastRoll.dice[0] : lastRoll.naturalTotal);
+  if (lastRoll.modifierTotal != 0) {
+    M5.Display.setTextDatum(top_right);
+    M5.Display.setTextColor(TFT_YELLOW);
+    M5.Display.setTextSize(1);
+    const String total = String("Total ") + lastRoll.total;
+    M5.Display.drawString(total, M5.Display.width() - 3, 3);
+  }
 }
 
 }  // namespace

@@ -9,6 +9,7 @@ This is an original project for the Pocket S3 family. It borrows product lessons
 - Hardware-independent C++ dice engine with `d4`, `d6`, `d8`, `d10`, `d12`, `d20`, `d100`, custom dice counts, and flat modifiers.
 - Six-player turn/session model with revision numbers and duplicate-command rejection.
 - M5StickS3 controls: blue face button rolls immediately; top M5 button plays a shake-roll animation.
+- Shaded pseudo-3D dice on the StickS3 and responsive Canvas dice in the WebUI for every supported die type.
 - Responsive WebUI prototype with an active-player highlight, action/power-up cards, combined totals, and dungeon-theme JSON import.
 - Open `PocketDice-XXXX` SoftAP with captive-portal discovery and room for eight Wi-Fi stations.
 - Realtime WebSocket table for six player seats, browser reconnect tokens, authoritative rolls, and host-controlled turns.

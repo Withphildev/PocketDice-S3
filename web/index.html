@@ -25,7 +25,11 @@
       <section class="dice-board" id="diceBoard" aria-live="polite">
         <div class="turn-label"><span id="turnName">Aria's turn</span><span id="formulaLabel">1d20</span></div>
         <div class="result-stage">
-          <div class="die" id="die"><span id="result">20</span></div>
+          <div class="die-stage" id="die" aria-label="Dice result 20">
+            <canvas id="diceCanvas" width="320" height="320" aria-hidden="true"></canvas>
+            <span class="die-result" id="result">20</span>
+            <small class="die-kind" id="dieKind">d20</small>
+          </div>
           <div class="total-copy">
             <span>Final total</span>
             <strong id="total">20</strong>

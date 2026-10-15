@@ -26,6 +26,7 @@ const actions = [
 const elements = {
   players: document.querySelector("#players"), actions: document.querySelector("#actions"),
   board: document.querySelector("#diceBoard"), die: document.querySelector("#die"),
+  diceCanvas: document.querySelector("#diceCanvas"), dieKind: document.querySelector("#dieKind"),
   result: document.querySelector("#result"), total: document.querySelector("#total"),
   breakdown: document.querySelector("#breakdown"), turnName: document.querySelector("#turnName"),
   formula: document.querySelector("#formulaLabel"), rollFormula: document.querySelector("#rollFormula"),
@@ -40,6 +41,110 @@ const modifierTotal = () => state.modifiers.reduce((sum, id) => sum + (actions.f
 const signed = (value) => `${value >= 0 ? "+" : ""}${value}`;
 const isMyTurn = () => demoMode || (state.myPlayerId !== 0 && state.myPlayerId === state.activePlayerId);
 const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+
+let animationFrame;
+let diceAngle = 0.38;
+
+function themeColor(name, fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function mixColor(hex, amount) {
+  const color = hex.match(/^#([0-9a-f]{6})$/i)?.[1];
+  if (!color) return hex;
+  const channel = (offset) => Math.max(0, Math.min(255, parseInt(color.slice(offset, offset + 2), 16) + amount));
+  return `rgb(${channel(0)},${channel(2)},${channel(4)})`;
+}
+
+function polygon(context, points, fill, stroke = "#ffffff55") {
+  context.beginPath();
+  points.forEach(([x, y], index) => index ? context.lineTo(x, y) : context.moveTo(x, y));
+  context.closePath();
+  context.fillStyle = fill;
+  context.fill();
+  context.strokeStyle = stroke;
+  context.lineWidth = 3;
+  context.stroke();
+}
+
+function ringPoints(cx, cy, radius, count, angle, yScale = 1) {
+  return Array.from({ length: count }, (_, index) => {
+    const phase = angle + index * Math.PI * 2 / count;
+    return [cx + Math.cos(phase) * radius, cy + Math.sin(phase) * radius * yScale];
+  });
+}
+
+function drawDie(angle = diceAngle) {
+  const canvas = elements.diceCanvas;
+  const context = canvas.getContext("2d");
+  const scale = devicePixelRatio || 1;
+  const size = canvas.clientWidth || 230;
+  canvas.width = Math.round(size * scale);
+  canvas.height = Math.round(size * scale);
+  context.setTransform(scale, 0, 0, scale, 0, 0);
+  context.clearRect(0, 0, size, size);
+
+  const cx = size / 2;
+  const cy = size / 2 - 5;
+  const radius = size * .39;
+  const accent = themeColor("--accent", "#7c5cff");
+  const light = mixColor(accent, 54);
+  const dark = mixColor(accent, -56);
+  const mid = mixColor(accent, -14);
+  const sides = state.lastRoll?.sides || state.sides;
+
+  if (sides === 6) {
+    const wobble = Math.sin(angle) * radius * .22;
+    const top = [cx, cy - radius];
+    const left = [cx - radius * .78, cy - radius * .42 + wobble];
+    const right = [cx + radius * .78, cy - radius * .42 - wobble];
+    const center = [cx, cy - radius * .02];
+    const bottomLeft = [cx - radius * .78, cy + radius * .55];
+    const bottomRight = [cx + radius * .78, cy + radius * .55];
+    polygon(context, [top, right, center, left], light);
+    polygon(context, [left, center, bottomRight, bottomLeft], mid);
+    polygon(context, [center, right, bottomRight], dark);
+  } else if (sides === 4) {
+    const points = ringPoints(cx, cy + radius * .12, radius, 3, angle - Math.PI / 2, .9);
+    const center = [cx + Math.sin(angle * 1.7) * radius * .15, cy + radius * .08];
+    polygon(context, [points[0], points[1], center], light);
+    polygon(context, [points[1], points[2], center], dark);
+    polygon(context, [points[2], points[0], center], mid);
+  } else if (sides === 100) {
+    const gradient = context.createRadialGradient(cx - radius * .35, cy - radius * .45, 4, cx, cy, radius);
+    gradient.addColorStop(0, light); gradient.addColorStop(.55, accent); gradient.addColorStop(1, dark);
+    context.beginPath(); context.arc(cx, cy, radius, 0, Math.PI * 2); context.fillStyle = gradient; context.fill();
+    context.strokeStyle = "#ffffff66"; context.lineWidth = 3; context.stroke();
+    for (let band = -2; band <= 2; band++) {
+      context.beginPath();
+      context.ellipse(cx, cy + band * radius * .26, radius * Math.cos(band * .24), radius * .16, angle * .15, 0, Math.PI * 2);
+      context.strokeStyle = "#ffffff2e"; context.stroke();
+    }
+  } else {
+    const count = sides === 8 ? 4 : sides === 10 ? 5 : sides === 12 ? 6 : 5;
+    const equator = ringPoints(cx, cy, radius * .9, count, angle, .48);
+    const top = [cx + Math.sin(angle * 1.3) * radius * .13, cy - radius];
+    const bottom = [cx - Math.sin(angle * 1.3) * radius * .13, cy + radius];
+    equator.forEach((point, index) => {
+      const next = equator[(index + 1) % equator.length];
+      polygon(context, [top, point, next], index % 2 ? mid : light);
+      polygon(context, [bottom, next, point], index % 2 ? dark : mid);
+    });
+  }
+}
+
+function animateDie() {
+  cancelAnimationFrame(animationFrame);
+  const started = performance.now();
+  const duration = 720;
+  const frame = (now) => {
+    const progress = Math.min(1, (now - started) / duration);
+    diceAngle += .17 + (1 - progress) * .32;
+    drawDie(diceAngle);
+    if (progress < 1) animationFrame = requestAnimationFrame(frame);
+  };
+  animationFrame = requestAnimationFrame(frame);
+}
 
 function showToast(message) {
   clearTimeout(toastTimer);
@@ -77,10 +182,13 @@ function render() {
   const roll = state.lastRoll;
   const face = roll.dice?.length === 1 ? roll.dice[0] : roll.naturalTotal;
   elements.result.textContent = face ?? "—";
+  elements.dieKind.textContent = `d${roll.sides || state.sides}`;
+  elements.die.setAttribute("aria-label", `d${roll.sides || state.sides} result ${face ?? "unknown"}`);
   elements.total.textContent = roll.total ?? "—";
   elements.breakdown.textContent = roll.naturalTotal == null ? "No rolls yet" : `${roll.naturalTotal} ${signed(roll.modifierTotal ?? 0)}`;
   elements.rollButton.disabled = !canRoll;
   elements.nextTurn.hidden = demoMode || state.myPlayerId === 0 || state.myPlayerId !== state.hostPlayerId;
+  drawDie();
 }
 
 function toggleAction(id) {
@@ -93,6 +201,7 @@ function animateResult() {
   elements.die.classList.remove("rolling");
   void elements.die.offsetWidth;
   elements.die.classList.add("rolling");
+  animateDie();
 }
 
 function localRoll() {
@@ -189,6 +298,7 @@ document.addEventListener("click", (event) => {
   if (dieButton) {
     state.sides = Number(dieButton.dataset.sides);
     document.querySelectorAll("[data-sides]").forEach((button) => button.classList.toggle("selected", button === dieButton));
+    state.lastRoll = { sides: state.sides, dice: [], naturalTotal: null, modifierTotal: 0, total: null };
     render();
   }
   const actionButton = event.target.closest("[data-action]");
@@ -203,6 +313,7 @@ elements.themeInput.addEventListener("change", async () => {
   try {
     const theme = JSON.parse(await file.text());
     for (const key of ["background", "panel", "accent", "text"]) document.documentElement.style.setProperty(`--${key === "background" ? "bg" : key}`, theme.colors[key]);
+    drawDie();
   } catch { showToast("That theme JSON could not be loaded."); }
 });
 
@@ -216,4 +327,5 @@ if (demoMode) {
 
 render();
 connect();
+window.addEventListener("resize", () => drawDie());
 

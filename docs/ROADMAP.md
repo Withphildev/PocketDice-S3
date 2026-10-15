@@ -14,6 +14,13 @@
 - Join/reconnect flow, host role, active-turn enforcement, and live broadcasts. ✓
 - Browser/device integration tests for stale revisions and duplicate commands. Next hardware-validation task.
 
+## 0.2.5 — Visual dice (implemented; device visual check pending)
+
+- Shaded pseudo-3D d4, d6, d8, d10, d12, d20, and d100 renders on the StickS3.
+- Responsive Canvas dice renderer and committed-result animation in the WebUI.
+- Dungeon-theme accent colors drive the browser dice material.
+- Die changes clear stale results so impossible faces are never shown.
+
 ## 0.3 — Dungeon kits
 
 - Campaign action library: attacks, damage, healing, power-ups, and penalties.
@@ -26,5 +33,5 @@
 - Initiative editor and turn order controls.
 - Physical shake detection as an optional input.
 - Roll history and replay-safe audit trail.
-- Device/browser animation and sound cues driven by the same committed event.
+- Sound cues driven by the same committed event.
 
