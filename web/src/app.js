@@ -74,6 +74,39 @@ function ringPoints(cx, cy, radius, count, angle, yScale = 1) {
   });
 }
 
+function drawD20(context, cx, cy, radius, angle, light, mid, dark) {
+  const phi = (1 + Math.sqrt(5)) / 2;
+  const vertices = [
+    [-1, phi, 0], [1, phi, 0], [-1, -phi, 0], [1, -phi, 0],
+    [0, -1, phi], [0, 1, phi], [0, -1, -phi], [0, 1, -phi],
+    [phi, 0, -1], [phi, 0, 1], [-phi, 0, -1], [-phi, 0, 1],
+  ];
+  const faces = [
+    [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+    [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+    [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+    [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
+  ];
+  const angleX = -.31 + Math.sin(angle * .6) * .12;
+  const cosY = Math.cos(angle);
+  const sinY = Math.sin(angle);
+  const cosX = Math.cos(angleX);
+  const sinX = Math.sin(angleX);
+  const scale = radius / 1.83;
+  const points = vertices.map(([x, y, z]) => {
+    const rotatedX = x * cosY + z * sinY;
+    const rotatedZ = -x * sinY + z * cosY;
+    const rotatedY = y * cosX - rotatedZ * sinX;
+    return [cx + rotatedX * scale, cy + rotatedY * scale, y * sinX + rotatedZ * cosX];
+  });
+  faces.map((face) => ({
+    face,
+    depth: face.reduce((sum, index) => sum + points[index][2], 0) / 3,
+  })).sort((a, b) => a.depth - b.depth).forEach(({ face, depth }) => {
+    polygon(context, face.map((index) => points[index]), depth > .65 ? light : depth > -.2 ? mid : dark, "#d8ceff88");
+  });
+}
+
 function drawDie(angle = diceAngle) {
   const canvas = elements.diceCanvas;
   const context = canvas.getContext("2d");
@@ -110,6 +143,8 @@ function drawDie(angle = diceAngle) {
     polygon(context, [points[0], points[1], center], light);
     polygon(context, [points[1], points[2], center], dark);
     polygon(context, [points[2], points[0], center], mid);
+  } else if (sides === 20) {
+    drawD20(context, cx, cy, radius, angle, light, mid, dark);
   } else if (sides === 100) {
     const gradient = context.createRadialGradient(cx - radius * .35, cy - radius * .45, 4, cx, cy, radius);
     gradient.addColorStop(0, light); gradient.addColorStop(.55, accent); gradient.addColorStop(1, dark);
