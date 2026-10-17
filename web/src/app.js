@@ -101,10 +101,13 @@ function makeD100() {
   const ringCount = 9;
   const vertices = [[0, 1, 0]];
   for (let ring = 0; ring < ringCount; ring++) {
-    const latitude = Math.PI * (ring + 1) / (ringCount + 1);
-    const ringRadius = Math.sin(latitude);
-    const y = Math.cos(latitude);
-    const phase = ring % 2 ? Math.PI / segments : 0;
+    // Equal vertical steps divide a sphere into equal-area bands. This keeps
+    // the equatorial faces from becoming much larger than the polar faces.
+    const y = 1 - 2 * (ring + 1) / (ringCount + 1);
+    const ringRadius = Math.sqrt(1 - y * y);
+    // Aligned rings make every four-sided facet planar and prevent a rolled
+    // face near a band boundary from projecting as an overlapping flap.
+    const phase = 0;
     for (let segment = 0; segment < segments; segment++) {
       const longitude = phase + segment * Math.PI * 2 / segments;
       vertices.push([Math.cos(longitude) * ringRadius, y, Math.sin(longitude) * ringRadius]);
@@ -130,33 +133,31 @@ function makeD100() {
 }
 
 function makeD10() {
-  const sourceVertices = [];
-  const height = .62;
+  const vertices = [[0, 1.46, 0], [0, -1.46, 0]];
   for (let index = 0; index < 5; index++) {
-    const angle = index * Math.PI * 2 / 5;
-    sourceVertices.push([Math.cos(angle), height, Math.sin(angle)]);
+    const lowAngle = index * Math.PI * 2 / 5;
+    const highAngle = lowAngle + Math.PI / 5;
+    vertices.push([Math.cos(lowAngle) * .95, -.18, Math.sin(lowAngle) * .95]);
+    vertices.push([Math.cos(highAngle) * .95, .18, Math.sin(highAngle) * .95]);
   }
-  for (let index = 0; index < 5; index++) {
-    const angle = Math.PI / 5 + index * Math.PI * 2 / 5;
-    sourceVertices.push([Math.cos(angle), -height, Math.sin(angle)]);
-  }
-  const sourceFaces = [[0, 1, 2, 3, 4], [9, 8, 7, 6, 5]];
-  for (let index = 0; index < 5; index++) {
-    sourceFaces.push([index, 5 + index, (index + 1) % 5]);
-    sourceFaces.push([index, 5 + (index + 4) % 5, 5 + index]);
-  }
-  const vertices = sourceFaces.map((face) => normalize(face.reduce((sum, vertexIndex) =>
-    sum.map((value, axis) => value + sourceVertices[vertexIndex][axis]), [0, 0, 0])));
-  const faces = sourceVertices.map((axis, vertexIndex) => {
-    const normal = normalize(axis);
+  const sortedFace = (indices, normal) => {
     const reference = normalize(cross(normal, Math.abs(normal[1]) < .9 ? [0, 1, 0] : [1, 0, 0]));
     const tangent = cross(normal, reference);
-    return sourceFaces.map((face, faceIndex) => face.includes(vertexIndex) ? faceIndex : -1)
-      .filter((faceIndex) => faceIndex >= 0)
-      .sort((a, b) => Math.atan2(dot(vertices[a], tangent), dot(vertices[a], reference)) -
-                      Math.atan2(dot(vertices[b], tangent), dot(vertices[b], reference)));
-  });
-  return { vertices, faces, radius: 1 };
+    return [...indices].sort((a, b) => Math.atan2(dot(vertices[a], tangent), dot(vertices[a], reference)) -
+                                      Math.atan2(dot(vertices[b], tangent), dot(vertices[b], reference)));
+  };
+  const faces = [];
+  for (let index = 0; index < 5; index++) {
+    const low = 2 + index * 2;
+    const high = 3 + index * 2;
+    const previousHigh = 3 + ((index + 4) % 5) * 2;
+    const nextLow = 2 + ((index + 1) % 5) * 2;
+    const topAngle = index * Math.PI * 2 / 5;
+    const bottomAngle = topAngle + Math.PI / 5;
+    faces.push(sortedFace([0, high, low, previousHigh], [Math.cos(topAngle), .62, Math.sin(topAngle)]));
+    faces.push(sortedFace([1, nextLow, high, low], [Math.cos(bottomAngle), -.62, Math.sin(bottomAngle)]));
+  }
+  return { vertices, faces, radius: 1.47 };
 }
 
 const dieMeshes = {
@@ -236,14 +237,18 @@ function slerpQuat(from, to, amount) {
   return from.map((value, index) => value * a + target[index] * b);
 }
 
-function tumbleOrientation(turns) {
-  return quatNormalize(quatMultiply(quatAxisAngle([0.72, 1, .24], turns * 1.13), quatAxisAngle([1, -.18, .6], turns * .77)));
+function tumbleOrientation(turns, sides) {
+  const d4Boost = sides === 4 ? 1.45 : 1;
+  const pitch = quatAxisAngle([1, 0, 0], turns * 1.07 * d4Boost + Math.sin(turns * .63) * .34);
+  const yaw = quatAxisAngle([0, 1, 0], turns * .83 + Math.sin(turns * .91) * .22);
+  const roll = quatAxisAngle([0, 0, 1], turns * (sides === 4 ? .71 : .37) + Math.sin(turns * 1.17) * .18);
+  return quatNormalize(quatMultiply(roll, quatMultiply(yaw, pitch)));
 }
 
 function restingOrientation(mesh, value) {
   const result = Math.max(1, Number(value) || 1);
   const face = mesh.faces[(result - 1) % mesh.faces.length];
-  const target = normalize([-.28, -.3, .91]);
+  const target = normalize(mesh === dieMeshes[10] ? [-.18, -.2, .96] : [-.28, -.3, .91]);
   const align = quatBetween(faceNormal(mesh, face), target);
   const twist = quatAxisAngle(target, ((result * 137.508) % 360) * Math.PI / 180);
   return quatNormalize(quatMultiply(twist, align));
@@ -360,12 +365,13 @@ function animateDie() {
   cancelAnimationFrame(animationFrame);
   const started = performance.now();
   const duration = 720;
-  const start = tumbleOrientation((started % 10000) / 360);
+  const sides = state.lastRoll?.sides || state.sides;
+  const start = tumbleOrientation((started % 10000) / 360, sides);
   const target = currentRestingOrientation();
   const frame = (now) => {
     const progress = Math.min(1, (now - started) / duration);
     const turns = progress * (Math.PI * 5.5 + (state.lastRoll?.naturalTotal || 1) * .07);
-    const tumbling = quatMultiply(tumbleOrientation(turns), start);
+    const tumbling = quatMultiply(tumbleOrientation(turns, sides), start);
     const settleProgress = Math.max(0, (progress - .58) / .42);
     const eased = 1 - Math.pow(1 - settleProgress, 3);
     diceOrientation = slerpQuat(tumbling, target, eased);
