@@ -145,7 +145,7 @@ function makeD10() {
     const previousBottom = ((index + 4) % 5) * 2 + 1;
     sourceFaces.push([top, bottom, nextTop], [top, previousBottom, bottom]);
   }
-  const poleScale = 1.42;
+  const poleScale = 1.15;
   const vertices = sourceFaces.map((face) => normalize(face.reduce(
     (sum, vertexIndex) => sum.map((value, axis) => value + sourceVertices[vertexIndex][axis]), [0, 0, 0])))
     .map(([x, y, z]) => [x, y * poleScale, z]);
@@ -249,12 +249,12 @@ function restingOrientation(mesh, value) {
   const result = Math.max(1, Number(value) || 1);
   const face = mesh.faces[(result - 1) % mesh.faces.length];
   const isD10 = mesh === dieMeshes[10];
-  const target = normalize(isD10 ? [0, 0, 1] : [-.28, -.3, .91]);
+  const target = normalize(isD10 ? [-.16, -.1, .98] : [-.28, -.3, .91]);
   const align = quatBetween(faceNormal(mesh, face), target);
   const alignedPole = isD10 ? rotateByQuat([0, 1, 0], align) : null;
   const twistAngle = isD10 ? Math.atan2(alignedPole[0], alignedPole[1]) :
     ((result * 137.508) % 360) * Math.PI / 180;
-  const twist = quatAxisAngle(target, twistAngle);
+  const twist = quatAxisAngle(isD10 ? [0, 0, 1] : target, twistAngle);
   return quatNormalize(quatMultiply(twist, align));
 }
 
