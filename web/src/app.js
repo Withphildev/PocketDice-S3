@@ -124,34 +124,40 @@ function makeD100() {
 }
 
 function makeD10() {
-  const poleLength = 1.46;
-  const equatorRadius = .95;
-  const equatorRise = .18;
-  const vertices = [[0, poleLength, 0], [0, -poleLength, 0]];
+  // A pentagonal trapezohedron is the exact dual of a pentagonal antiprism.
+  // Building the dual keeps its two poles and all ten kite faces identical.
+  const sourceHeight = .62;
+  const sourceVertices = [];
   for (let index = 0; index < 5; index++) {
-    const lowAngle = index * Math.PI * 2 / 5;
-    const highAngle = lowAngle + Math.PI / 5;
-    vertices.push([Math.cos(lowAngle) * equatorRadius, -equatorRise, Math.sin(lowAngle) * equatorRadius]);
-    vertices.push([Math.cos(highAngle) * equatorRadius, equatorRise, Math.sin(highAngle) * equatorRadius]);
+    const topAngle = index * Math.PI * 2 / 5;
+    const bottomAngle = topAngle + Math.PI / 5;
+    sourceVertices.push([Math.cos(topAngle), sourceHeight, Math.sin(topAngle)]);
+    sourceVertices.push([Math.cos(bottomAngle), -sourceHeight, Math.sin(bottomAngle)]);
   }
-  const sortedFace = (indices, normal) => {
+  const sourceFaces = [
+    [0, 2, 4, 6, 8],
+    [9, 7, 5, 3, 1],
+  ];
+  for (let index = 0; index < 5; index++) {
+    const top = index * 2;
+    const bottom = index * 2 + 1;
+    const nextTop = ((index + 1) % 5) * 2;
+    const previousBottom = ((index + 4) % 5) * 2 + 1;
+    sourceFaces.push([top, bottom, nextTop], [top, previousBottom, bottom]);
+  }
+  const poleScale = 1.42;
+  const vertices = sourceFaces.map((face) => normalize(face.reduce(
+    (sum, vertexIndex) => sum.map((value, axis) => value + sourceVertices[vertexIndex][axis]), [0, 0, 0])))
+    .map(([x, y, z]) => [x, y * poleScale, z]);
+  const faces = sourceVertices.map((normal, sourceIndex) => {
+    const indices = sourceFaces.map((face, faceIndex) => face.includes(sourceIndex) ? faceIndex : -1)
+      .filter((faceIndex) => faceIndex >= 0);
     const reference = normalize(cross(normal, Math.abs(normal[1]) < .9 ? [0, 1, 0] : [1, 0, 0]));
     const tangent = cross(normal, reference);
     return [...indices].sort((a, b) => Math.atan2(dot(vertices[a], tangent), dot(vertices[a], reference)) -
                                       Math.atan2(dot(vertices[b], tangent), dot(vertices[b], reference)));
-  };
-  const faces = [];
-  for (let index = 0; index < 5; index++) {
-    const low = 2 + index * 2;
-    const high = 3 + index * 2;
-    const previousHigh = 3 + ((index + 4) % 5) * 2;
-    const nextLow = 2 + ((index + 1) % 5) * 2;
-    const topAngle = index * Math.PI * 2 / 5;
-    const bottomAngle = topAngle + Math.PI / 5;
-    faces.push(sortedFace([0, high, low, previousHigh], [Math.cos(topAngle), .62, Math.sin(topAngle)]));
-    faces.push(sortedFace([1, nextLow, high, low], [Math.cos(bottomAngle), -.62, Math.sin(bottomAngle)]));
-  }
-  return { vertices, faces, radius: poleLength };
+  });
+  return { vertices, faces, radius: poleScale, orthographic: true };
 }
 
 const dieMeshes = {
@@ -242,9 +248,13 @@ function tumbleOrientation(turns, sides) {
 function restingOrientation(mesh, value) {
   const result = Math.max(1, Number(value) || 1);
   const face = mesh.faces[(result - 1) % mesh.faces.length];
-  const target = normalize(mesh === dieMeshes[10] ? [-.18, -.2, .96] : [-.28, -.3, .91]);
+  const isD10 = mesh === dieMeshes[10];
+  const target = normalize(isD10 ? [0, 0, 1] : [-.28, -.3, .91]);
   const align = quatBetween(faceNormal(mesh, face), target);
-  const twist = quatAxisAngle(target, ((result * 137.508) % 360) * Math.PI / 180);
+  const alignedPole = isD10 ? rotateByQuat([0, 1, 0], align) : null;
+  const twistAngle = isD10 ? Math.atan2(alignedPole[0], alignedPole[1]) :
+    ((result * 137.508) % 360) * Math.PI / 180;
+  const twist = quatAxisAngle(target, twistAngle);
   return quatNormalize(quatMultiply(twist, align));
 }
 
@@ -351,7 +361,7 @@ function drawMesh(context, cx, cy, radius, orientation, mesh, accent, result) {
   const base = colorChannels(accent);
   const transformed = mesh.vertices.map((vertex) => multiply(rotateByQuat(vertex, orientation), 1 / mesh.radius));
   const projected = transformed.map(([x, y, z]) => {
-    const perspective = camera[2] / (camera[2] - z);
+    const perspective = mesh.orthographic ? 1 : camera[2] / (camera[2] - z);
     return [cx + x * radius * perspective, cy + y * radius * perspective, z];
   });
   const selectedFace = Math.max(0, ((Number(result) || 1) - 1) % mesh.faces.length);

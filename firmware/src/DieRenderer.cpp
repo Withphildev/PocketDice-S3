@@ -281,7 +281,11 @@ void buildD10(Mesh& mesh) {
     output.count = count;
     for (std::uint8_t index = 0; index < count; ++index) output.vertex[index] = incident[index];
   }
-  mesh.radius = 1.0f;
+  constexpr float poleScale = 1.42f;
+  for (std::uint8_t index = 0; index < mesh.vertexCount; ++index) {
+    mesh.vertices[index].y *= poleScale;
+  }
+  mesh.radius = poleScale;
 }
 
 void buildMesh(std::uint16_t sides, Mesh& mesh) {
@@ -329,9 +333,12 @@ Mat3 orientationFor(const Mesh& mesh, std::uint16_t value, bool settled, int fra
     return matrixMultiply(tumble, y);
   }
   const std::uint8_t selected = static_cast<std::uint8_t>((std::max<std::uint16_t>(1, value) - 1) % mesh.faceCount);
-  const Vec3 target = normalize({-0.28f, -0.3f, 0.91f});
+  const bool isD10 = mesh.faceCount == 10;
+  const Vec3 target = normalize(isD10 ? Vec3{0, 0, 1} : Vec3{-0.28f, -0.3f, 0.91f});
   const Mat3 align = rotationBetween(faceNormal(mesh, mesh.faces[selected]), target);
-  const float twist = fmodf(value * 137.508f, 360.0f) * kPi / 180.0f;
+  const Vec3 alignedPole = isD10 ? transform(align, {0, 1, 0}) : Vec3{0, 1, 0};
+  const float twist = isD10 ? atan2f(alignedPole.x, alignedPole.y)
+                            : fmodf(value * 137.508f, 360.0f) * kPi / 180.0f;
   return matrixMultiply(axisAngle(target, twist), align);
 }
 
@@ -366,7 +373,9 @@ void drawDie(std::uint16_t sides, std::uint16_t value, bool settled, int frame) 
 
   for (std::uint8_t index = 0; index < mesh.vertexCount; ++index) {
     transformed[index] = multiply(transform(orientation, mesh.vertices[index]), 1.0f / mesh.radius);
-    const float perspective = cameraZ / (cameraZ - transformed[index].z);
+    // The d10 is centrally symmetric. Orthographic projection preserves that
+    // symmetry on the small display instead of shortening the farther pole.
+    const float perspective = sides == 10 ? 1.0f : cameraZ / (cameraZ - transformed[index].z);
     projected[index] = {centerX + transformed[index].x * radius * perspective,
                         centerY + transformed[index].y * radius * perspective,
                         transformed[index].z};
