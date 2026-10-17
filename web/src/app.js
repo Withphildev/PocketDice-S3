@@ -99,51 +99,28 @@ function makeDodecahedron() {
 function makeD100() {
   const vertices = [];
   const faces = [];
-  const ringSpecs = [
-    { y: .91, count: 6 },
-    { y: .68, count: 14 },
-    { y: .45, count: 14 },
-    { y: .22, count: 14 },
-    { y: -.22, count: 14 },
-    { y: -.45, count: 14 },
-    { y: -.68, count: 14 },
-    { y: -.91, count: 6 },
-  ];
-  const rings = ringSpecs.map(({ y, count }) => {
-    const radius = Math.sqrt(1 - y * y);
-    return Array.from({ length: count }, (_, index) => {
-      const angle = -Math.PI / 2 + index * Math.PI * 2 / count;
-      return vertices.push([Math.cos(angle) * radius, y, Math.sin(angle) * radius]) - 1;
-    });
-  });
-
-  const bridge = (upper, lower) => {
-    if (upper.length === lower.length) {
-      for (let index = 0; index < upper.length; index++) {
-        faces.push([upper[index], lower[index], lower[(index + 1) % lower.length], upper[(index + 1) % upper.length]]);
-      }
-      return;
+  const spots = [];
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const spotRadius = .158;
+  const planeDepth = Math.sqrt(1 - spotRadius * spotRadius);
+  for (let index = 0; index < 100; index++) {
+    const y = 1 - 2 * (index + .5) / 100;
+    const radial = Math.sqrt(1 - y * y);
+    const longitude = index * goldenAngle;
+    const center = [Math.cos(longitude) * radial, y, Math.sin(longitude) * radial];
+    const tangent = normalize(cross(center, Math.abs(center[1]) < .9 ? [0, 1, 0] : [1, 0, 0]));
+    const bitangent = cross(center, tangent);
+    const face = [];
+    for (let corner = 0; corner < 10; corner++) {
+      const angle = corner * Math.PI * 2 / 10;
+      const point = [0, 1, 2].map((axis) => center[axis] * planeDepth +
+        tangent[axis] * Math.cos(angle) * spotRadius + bitangent[axis] * Math.sin(angle) * spotRadius);
+      face.push(vertices.push(point) - 1);
     }
-    const fine = upper.length > lower.length ? upper : lower;
-    const coarse = upper.length > lower.length ? lower : upper;
-    const upperIsFine = upper.length > lower.length;
-    for (let index = 0; index < fine.length; index++) {
-      const next = (index + 1) % fine.length;
-      const coarseIndex = Math.floor(index * coarse.length / fine.length);
-      const coarseNext = Math.floor((index + 1) * coarse.length / fine.length) % coarse.length;
-      const face = upperIsFine
-        ? [fine[index], coarse[coarseIndex], ...(coarseNext === coarseIndex ? [] : [coarse[coarseNext]]), fine[next]]
-        : [coarse[coarseIndex], fine[index], fine[next], ...(coarseNext === coarseIndex ? [] : [coarse[coarseNext]])];
-      faces.push(face);
-    }
-  };
-
-  // Results 1 and 100 map to the two six-sided polar caps.
-  faces.push([...rings[0]].reverse());
-  for (let ring = 0; ring < rings.length - 1; ring++) bridge(rings[ring], rings[ring + 1]);
-  faces.push([...rings[rings.length - 1]]);
-  if (faces.length !== 100) throw new Error("d100 mesh must contain exactly 100 faces");
-  return { vertices, faces, radius: 1 };
+    faces.push(face);
+    spots.push({ center, tangent, bitangent });
+  }
+  return { vertices, faces, spots, spotRadius, radius: 1 };
 }
 
 function makeD10() {
@@ -298,6 +275,76 @@ function drawTableShadow(context, cx, cy, radius) {
   context.restore();
 }
 
+function drawZocchihedron(context, cx, cy, radius, orientation, mesh, accent, result) {
+  const camera = [0, 0, 3.7];
+  const lightDirection = normalize([-.65, -.82, 1.35]);
+  const base = colorChannels(accent);
+  const project = ([x, y, z]) => {
+    const perspective = camera[2] / (camera[2] - z);
+    return [cx + x * radius * perspective, cy + y * radius * perspective, z];
+  };
+
+  context.save();
+  context.beginPath();
+  context.arc(cx, cy, radius, 0, Math.PI * 2);
+  context.clip();
+  const body = context.createRadialGradient(cx - radius * .38, cy - radius * .48, radius * .05,
+    cx + radius * .08, cy + radius * .1, radius * 1.18);
+  body.addColorStop(0, shadeColor(base, 1.34));
+  body.addColorStop(.46, shadeColor(base, .92));
+  body.addColorStop(1, shadeColor(base, .35));
+  context.fillStyle = body;
+  context.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+
+  const selected = Math.max(0, ((Number(result) || 1) - 1) % 100);
+  const spots = mesh.spots.map((spot, index) => {
+    const center = rotateByQuat(spot.center, orientation);
+    return {
+      index,
+      center,
+      tangent: rotateByQuat(spot.tangent, orientation),
+      bitangent: rotateByQuat(spot.bitangent, orientation),
+    };
+  }).filter(({ center }) => center[2] > -.08).sort((a, b) => a.center[2] - b.center[2]);
+
+  spots.forEach(({ index, center, tangent, bitangent }) => {
+    const planeDepth = Math.sqrt(1 - mesh.spotRadius * mesh.spotRadius);
+    const points = Array.from({ length: 14 }, (_, corner) => {
+      const angle = corner * Math.PI * 2 / 14;
+      return project([0, 1, 2].map((axis) => center[axis] * planeDepth +
+        tangent[axis] * Math.cos(angle) * mesh.spotRadius +
+        bitangent[axis] * Math.sin(angle) * mesh.spotRadius));
+    });
+    const view = normalize(subtract(camera, center));
+    const diffuse = Math.max(0, dot(center, lightDirection));
+    const halfway = normalize(add(lightDirection, view));
+    const specular = Math.pow(Math.max(0, dot(center, halfway)), 22);
+    const intensity = .5 + diffuse * .48 + specular * .18 + (index === selected ? .12 : 0);
+    const projectedCenter = project(multiply(center, planeDepth));
+    const gradient = context.createRadialGradient(projectedCenter[0] - radius * .018,
+      projectedCenter[1] - radius * .022, 0, projectedCenter[0], projectedCenter[1], radius * .18);
+    gradient.addColorStop(0, shadeColor(base, intensity + .08));
+    gradient.addColorStop(1, shadeColor(base, Math.max(.25, intensity - .1)));
+    polygon(context, points, gradient,
+      index === selected ? "rgba(255,255,255,.86)" : "rgba(225,219,255,.28)",
+      index === selected ? 1.8 : .65);
+  });
+
+  const gloss = context.createRadialGradient(cx - radius * .43, cy - radius * .5, 0,
+    cx - radius * .43, cy - radius * .5, radius * .52);
+  gloss.addColorStop(0, "rgba(255,255,255,.24)");
+  gloss.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = gloss;
+  context.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+  context.restore();
+
+  context.beginPath();
+  context.arc(cx, cy, radius, 0, Math.PI * 2);
+  context.strokeStyle = "rgba(222,216,255,.48)";
+  context.lineWidth = 1.25;
+  context.stroke();
+}
+
 function drawMesh(context, cx, cy, radius, orientation, mesh, accent, result) {
   const camera = [0, 0, 3.7];
   const lightDirection = normalize([-.65, -.82, 1.35]);
@@ -375,7 +422,8 @@ function drawDie(orientation = diceOrientation || currentRestingOrientation()) {
   const mesh = dieMeshes[sides] || dieMeshes[10];
   const result = state.lastRoll?.dice?.[0] ?? state.lastRoll?.naturalTotal ?? 1;
   drawTableShadow(context, cx, cy, radius);
-  drawMesh(context, cx, cy, radius, orientation, mesh, accent, result);
+  if (sides === 100) drawZocchihedron(context, cx, cy, radius, orientation, mesh, accent, result);
+  else drawMesh(context, cx, cy, radius, orientation, mesh, accent, result);
 }
 
 function animateDie() {
