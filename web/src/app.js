@@ -43,17 +43,10 @@ const isMyTurn = () => demoMode || (state.myPlayerId !== 0 && state.myPlayerId =
 const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
 
 let animationFrame;
-let diceAngle = 0.38;
+let diceOrientation;
 
 function themeColor(name, fallback) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
-
-function mixColor(hex, amount) {
-  const color = hex.match(/^#([0-9a-f]{6})$/i)?.[1];
-  if (!color) return hex;
-  const channel = (offset) => Math.max(0, Math.min(255, parseInt(color.slice(offset, offset + 2), 16) + amount));
-  return `rgb(${channel(0)},${channel(2)},${channel(4)})`;
 }
 
 function polygon(context, points, fill, stroke = "#ffffff55", width = 3) {
@@ -65,13 +58,6 @@ function polygon(context, points, fill, stroke = "#ffffff55", width = 3) {
   context.strokeStyle = stroke;
   context.lineWidth = width;
   context.stroke();
-}
-
-function ringPoints(cx, cy, radius, count, angle, yScale = 1) {
-  return Array.from({ length: count }, (_, index) => {
-    const phase = angle + index * Math.PI * 2 / count;
-    return [cx + Math.cos(phase) * radius, cy + Math.sin(phase) * radius * yScale];
-  });
 }
 
 const phi = (1 + Math.sqrt(5)) / 2;
@@ -143,6 +129,36 @@ function makeD100() {
   return { vertices, faces, radius: 1 };
 }
 
+function makeD10() {
+  const sourceVertices = [];
+  const height = .62;
+  for (let index = 0; index < 5; index++) {
+    const angle = index * Math.PI * 2 / 5;
+    sourceVertices.push([Math.cos(angle), height, Math.sin(angle)]);
+  }
+  for (let index = 0; index < 5; index++) {
+    const angle = Math.PI / 5 + index * Math.PI * 2 / 5;
+    sourceVertices.push([Math.cos(angle), -height, Math.sin(angle)]);
+  }
+  const sourceFaces = [[0, 1, 2, 3, 4], [9, 8, 7, 6, 5]];
+  for (let index = 0; index < 5; index++) {
+    sourceFaces.push([index, 5 + index, (index + 1) % 5]);
+    sourceFaces.push([index, 5 + (index + 4) % 5, 5 + index]);
+  }
+  const vertices = sourceFaces.map((face) => normalize(face.reduce((sum, vertexIndex) =>
+    sum.map((value, axis) => value + sourceVertices[vertexIndex][axis]), [0, 0, 0])));
+  const faces = sourceVertices.map((axis, vertexIndex) => {
+    const normal = normalize(axis);
+    const reference = normalize(cross(normal, Math.abs(normal[1]) < .9 ? [0, 1, 0] : [1, 0, 0]));
+    const tangent = cross(normal, reference);
+    return sourceFaces.map((face, faceIndex) => face.includes(vertexIndex) ? faceIndex : -1)
+      .filter((faceIndex) => faceIndex >= 0)
+      .sort((a, b) => Math.atan2(dot(vertices[a], tangent), dot(vertices[a], reference)) -
+                      Math.atan2(dot(vertices[b], tangent), dot(vertices[b], reference)));
+  });
+  return { vertices, faces, radius: 1 };
+}
+
 const dieMeshes = {
   4: {
     vertices: [[1, 1, 1], [-1, -1, 1], [-1, 1, -1], [1, -1, -1]],
@@ -156,35 +172,170 @@ const dieMeshes = {
     vertices: [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]],
     faces: [[2, 0, 4], [2, 4, 1], [2, 1, 5], [2, 5, 0], [3, 4, 0], [3, 1, 4], [3, 5, 1], [3, 0, 5]], radius: 1,
   },
+  10: makeD10(),
   12: makeDodecahedron(),
   20: { vertices: icoVertices, faces: icoFaces, radius: Math.sqrt(1 + phi * phi) },
   100: makeD100(),
 };
 
-function drawMesh(context, cx, cy, radius, angle, mesh, light, mid, dark) {
-  const angleX = -.31 + Math.sin(angle * .6) * .12;
-  const cosY = Math.cos(angle);
-  const sinY = Math.sin(angle);
-  const cosX = Math.cos(angleX);
-  const sinX = Math.sin(angleX);
-  const scale = radius / mesh.radius;
-  const points = mesh.vertices.map(([x, y, z]) => {
-    const rotatedX = x * cosY + z * sinY;
-    const rotatedZ = -x * sinY + z * cosY;
-    const rotatedY = y * cosX - rotatedZ * sinX;
-    return [cx + rotatedX * scale, cy + rotatedY * scale, y * sinX + rotatedZ * cosX];
-  });
-  const lineWidth = mesh.faces.length >= 80 ? 1 : mesh.faces.length >= 20 ? 2 : 3;
-  mesh.faces.map((face) => ({
-    face,
-    depth: face.reduce((sum, index) => sum + points[index][2], 0) / 3,
-  })).sort((a, b) => a.depth - b.depth).forEach(({ face, depth }) => {
-    const normalizedDepth = depth / mesh.radius;
-    polygon(context, face.map((index) => points[index]), normalizedDepth > .3 ? light : normalizedDepth > -.2 ? mid : dark, "#d8ceff88", lineWidth);
-  });
+const add = (a, b) => a.map((value, index) => value + b[index]);
+const subtract = (a, b) => a.map((value, index) => value - b[index]);
+const multiply = (vector, scalar) => vector.map((value) => value * scalar);
+
+function faceNormal(mesh, face) {
+  const normal = normalize(cross(subtract(mesh.vertices[face[1]], mesh.vertices[face[0]]), subtract(mesh.vertices[face[2]], mesh.vertices[face[0]])));
+  const center = multiply(face.reduce((sum, index) => add(sum, mesh.vertices[index]), [0, 0, 0]), 1 / face.length);
+  return dot(normal, center) < 0 ? multiply(normal, -1) : normal;
 }
 
-function drawDie(angle = diceAngle) {
+function quatNormalize([x, y, z, w]) {
+  const length = Math.hypot(x, y, z, w);
+  return [x / length, y / length, z / length, w / length];
+}
+
+function quatMultiply([ax, ay, az, aw], [bx, by, bz, bw]) {
+  return [
+    aw * bx + ax * bw + ay * bz - az * by,
+    aw * by - ax * bz + ay * bw + az * bx,
+    aw * bz + ax * by - ay * bx + az * bw,
+    aw * bw - ax * bx - ay * by - az * bz,
+  ];
+}
+
+function quatAxisAngle(axis, angle) {
+  const half = angle / 2;
+  return [...multiply(normalize(axis), Math.sin(half)), Math.cos(half)];
+}
+
+function quatBetween(from, to) {
+  const a = normalize(from);
+  const b = normalize(to);
+  const cosine = dot(a, b);
+  if (cosine < -.9999) return quatAxisAngle(Math.abs(a[0]) < .8 ? cross(a, [1, 0, 0]) : cross(a, [0, 1, 0]), Math.PI);
+  return quatNormalize([...cross(a, b), 1 + cosine]);
+}
+
+function rotateByQuat(vector, [qx, qy, qz, qw]) {
+  const q = [qx, qy, qz];
+  const t = multiply(cross(q, vector), 2);
+  return add(vector, add(multiply(t, qw), cross(q, t)));
+}
+
+function slerpQuat(from, to, amount) {
+  let cosine = dot(from, to);
+  let target = to;
+  if (cosine < 0) {
+    cosine = -cosine;
+    target = multiply(to, -1);
+  }
+  if (cosine > .9995) return quatNormalize(from.map((value, index) => value + amount * (target[index] - value)));
+  const angle = Math.acos(Math.max(-1, Math.min(1, cosine)));
+  const denominator = Math.sin(angle);
+  const a = Math.sin((1 - amount) * angle) / denominator;
+  const b = Math.sin(amount * angle) / denominator;
+  return from.map((value, index) => value * a + target[index] * b);
+}
+
+function tumbleOrientation(turns) {
+  return quatNormalize(quatMultiply(quatAxisAngle([0.72, 1, .24], turns * 1.13), quatAxisAngle([1, -.18, .6], turns * .77)));
+}
+
+function restingOrientation(mesh, value) {
+  const result = Math.max(1, Number(value) || 1);
+  const face = mesh.faces[(result - 1) % mesh.faces.length];
+  const target = normalize([-.28, -.3, .91]);
+  const align = quatBetween(faceNormal(mesh, face), target);
+  const twist = quatAxisAngle(target, ((result * 137.508) % 360) * Math.PI / 180);
+  return quatNormalize(quatMultiply(twist, align));
+}
+
+function colorChannels(color) {
+  const context = document.createElement("canvas").getContext("2d");
+  context.fillStyle = color;
+  context.fillRect(0, 0, 1, 1);
+  return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+}
+
+function shadeColor(channels, intensity) {
+  const adjusted = channels.map((value) => Math.round(Math.max(0, Math.min(255, value * intensity))));
+  return `rgb(${adjusted.join(",")})`;
+}
+
+function drawTableShadow(context, cx, cy, radius) {
+  context.save();
+  context.translate(cx + radius * .14, cy + radius * .76);
+  context.scale(1, .29);
+  const shadow = context.createRadialGradient(0, 0, radius * .12, 0, 0, radius * .83);
+  shadow.addColorStop(0, "rgba(0,0,0,.48)");
+  shadow.addColorStop(.55, "rgba(0,0,0,.24)");
+  shadow.addColorStop(1, "rgba(0,0,0,0)");
+  context.fillStyle = shadow;
+  context.beginPath();
+  context.arc(0, 0, radius, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawMesh(context, cx, cy, radius, orientation, mesh, accent, result) {
+  const camera = [0, 0, 3.7];
+  const lightDirection = normalize([-.65, -.82, 1.35]);
+  const base = colorChannels(accent);
+  const transformed = mesh.vertices.map((vertex) => multiply(rotateByQuat(vertex, orientation), 1 / mesh.radius));
+  const projected = transformed.map(([x, y, z]) => {
+    const perspective = camera[2] / (camera[2] - z);
+    return [cx + x * radius * perspective, cy + y * radius * perspective, z];
+  });
+  const selectedFace = Math.max(0, ((Number(result) || 1) - 1) % mesh.faces.length);
+  const visible = [];
+  mesh.faces.forEach((face, faceIndex) => {
+    let normal = normalize(cross(subtract(transformed[face[1]], transformed[face[0]]), subtract(transformed[face[2]], transformed[face[0]])));
+    const center = multiply(face.reduce((sum, index) => add(sum, transformed[index]), [0, 0, 0]), 1 / face.length);
+    if (dot(normal, center) < 0) normal = multiply(normal, -1);
+    const view = normalize(subtract(camera, center));
+    if (dot(normal, view) <= .015) return;
+    const diffuse = Math.max(0, dot(normal, lightDirection));
+    const halfway = normalize(add(lightDirection, view));
+    const specular = Math.pow(Math.max(0, dot(normal, halfway)), 28);
+    visible.push({ face, faceIndex, normal, diffuse, specular, depth: center[2] });
+  });
+  const lineWidth = mesh.faces.length >= 80 ? .7 : mesh.faces.length >= 20 ? 1.35 : 2;
+  visible.sort((a, b) => a.depth - b.depth).forEach(({ face, faceIndex, diffuse, specular }) => {
+    const intensity = .36 + diffuse * .68 + specular * .42 + (faceIndex === selectedFace ? .09 : 0);
+    const points = face.map((index) => projected[index]);
+    const boundsX = points.map((point) => point[0]);
+    const boundsY = points.map((point) => point[1]);
+    const gradient = context.createLinearGradient(Math.min(...boundsX), Math.min(...boundsY), Math.max(...boundsX), Math.max(...boundsY));
+    gradient.addColorStop(0, shadeColor(base, intensity + .13));
+    gradient.addColorStop(1, shadeColor(base, Math.max(.2, intensity - .11)));
+    polygon(context, points, gradient, faceIndex === selectedFace ? "rgba(255,255,255,.78)" : "rgba(224,218,255,.34)", lineWidth + (faceIndex === selectedFace ? .8 : 0));
+  });
+
+  context.save();
+  context.beginPath();
+  visible.forEach(({ face }) => {
+    face.map((index) => projected[index]).forEach(([x, y], index) => index ? context.lineTo(x, y) : context.moveTo(x, y));
+    context.closePath();
+  });
+  context.clip();
+  context.globalCompositeOperation = "screen";
+  const gloss = context.createRadialGradient(cx - radius * .38, cy - radius * .48, 0, cx - radius * .38, cy - radius * .48, radius * .58);
+  gloss.addColorStop(0, "rgba(255,255,255,.2)");
+  gloss.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = gloss;
+  context.beginPath();
+  context.arc(cx, cy, radius * 1.08, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function currentRestingOrientation() {
+  const sides = state.lastRoll?.sides || state.sides;
+  const mesh = dieMeshes[sides] || dieMeshes[10];
+  const result = state.lastRoll?.dice?.[0] ?? state.lastRoll?.naturalTotal ?? 1;
+  return restingOrientation(mesh, result);
+}
+
+function drawDie(orientation = diceOrientation || currentRestingOrientation()) {
   const canvas = elements.diceCanvas;
   const context = canvas.getContext("2d");
   const scale = devicePixelRatio || 1;
@@ -198,35 +349,29 @@ function drawDie(angle = diceAngle) {
   const cy = size / 2 - 5;
   const radius = size * .39;
   const accent = themeColor("--accent", "#7c5cff");
-  const light = mixColor(accent, 54);
-  const dark = mixColor(accent, -56);
-  const mid = mixColor(accent, -14);
   const sides = state.lastRoll?.sides || state.sides;
-
-  if (dieMeshes[sides]) {
-    drawMesh(context, cx, cy, radius, angle, dieMeshes[sides], light, mid, dark);
-  } else {
-    const count = 5;
-    const equator = ringPoints(cx, cy, radius * .9, count, angle, .48);
-    const top = [cx + Math.sin(angle * 1.3) * radius * .13, cy - radius];
-    const bottom = [cx - Math.sin(angle * 1.3) * radius * .13, cy + radius];
-    equator.forEach((point, index) => {
-      const next = equator[(index + 1) % equator.length];
-      polygon(context, [top, point, next], index % 2 ? mid : light);
-      polygon(context, [bottom, next, point], index % 2 ? dark : mid);
-    });
-  }
+  const mesh = dieMeshes[sides] || dieMeshes[10];
+  const result = state.lastRoll?.dice?.[0] ?? state.lastRoll?.naturalTotal ?? 1;
+  drawTableShadow(context, cx, cy, radius);
+  drawMesh(context, cx, cy, radius, orientation, mesh, accent, result);
 }
 
 function animateDie() {
   cancelAnimationFrame(animationFrame);
   const started = performance.now();
   const duration = 720;
+  const start = tumbleOrientation((started % 10000) / 360);
+  const target = currentRestingOrientation();
   const frame = (now) => {
     const progress = Math.min(1, (now - started) / duration);
-    diceAngle += .17 + (1 - progress) * .32;
-    drawDie(diceAngle);
+    const turns = progress * (Math.PI * 5.5 + (state.lastRoll?.naturalTotal || 1) * .07);
+    const tumbling = quatMultiply(tumbleOrientation(turns), start);
+    const settleProgress = Math.max(0, (progress - .58) / .42);
+    const eased = 1 - Math.pow(1 - settleProgress, 3);
+    diceOrientation = slerpQuat(tumbling, target, eased);
+    drawDie(diceOrientation);
     if (progress < 1) animationFrame = requestAnimationFrame(frame);
+    else diceOrientation = target;
   };
   animationFrame = requestAnimationFrame(frame);
 }
@@ -292,6 +437,7 @@ function animateResult() {
 function localRoll() {
   const naturalTotal = Math.floor(Math.random() * state.sides) + 1;
   state.lastRoll = { sides: state.sides, dice: [naturalTotal], naturalTotal, modifierTotal: modifierTotal(), total: naturalTotal + modifierTotal() };
+  diceOrientation = currentRestingOrientation();
   animateResult();
   render();
 }
@@ -331,9 +477,11 @@ function handleMessage(message) {
   if (message.type === "session.snapshot") {
     const localModifiers = state.modifiers;
     Object.assign(state, message.session, { revision: message.revision, modifiers: localModifiers });
+    diceOrientation = currentRestingOrientation();
   } else if (message.type === "roll.result") {
     state.lastRoll = message.result;
     state.revision = message.revision;
+    diceOrientation = currentRestingOrientation();
     animateResult();
   }
   render();
@@ -384,6 +532,7 @@ document.addEventListener("click", (event) => {
     state.sides = Number(dieButton.dataset.sides);
     document.querySelectorAll("[data-sides]").forEach((button) => button.classList.toggle("selected", button === dieButton));
     state.lastRoll = { sides: state.sides, dice: [], naturalTotal: null, modifierTotal: 0, total: null };
+    diceOrientation = undefined;
     render();
   }
   const actionButton = event.target.closest("[data-action]");

@@ -14,10 +14,12 @@
 - Join/reconnect flow, host role, active-turn enforcement, and live broadcasts. ✓
 - Browser/device integration tests for stale revisions and duplicate commands. Next hardware-validation task.
 
-## 0.2.5 — Visual dice (implemented; device visual check pending)
+## 0.2.7 — Visual dice (implemented; device visual check pending)
 
-- Shaded pseudo-3D d4, d6, d8, d10, d12, d20, and d100 renders on the StickS3.
-- Responsive Canvas dice renderer and committed-result animation in the WebUI.
+- Original polyhedral d4, d6, d8, d10, d12, d20, and d100 meshes on the StickS3.
+- Matching responsive Canvas renderer in the WebUI with back-face culling, perspective,
+  fixed-light shading, highlights, table shadows, and committed-result animation.
+- Every result deterministically selects and turns its corresponding mesh face toward the viewer.
 - Dungeon-theme accent colors drive the browser dice material.
 - Die changes clear stale results so impossible faces are never shown.
 
