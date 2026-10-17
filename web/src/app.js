@@ -97,48 +97,65 @@ function makeDodecahedron() {
 }
 
 function makeD100() {
-  const segments = 10;
-  const ringCount = 9;
-  const vertices = [[0, 1, 0]];
-  for (let ring = 0; ring < ringCount; ring++) {
-    // Equal vertical steps divide a sphere into equal-area bands. This keeps
-    // the equatorial faces from becoming much larger than the polar faces.
-    const y = 1 - 2 * (ring + 1) / (ringCount + 1);
-    const ringRadius = Math.sqrt(1 - y * y);
-    // Aligned rings make every four-sided facet planar and prevent a rolled
-    // face near a band boundary from projecting as an overlapping flap.
-    const phase = 0;
-    for (let segment = 0; segment < segments; segment++) {
-      const longitude = phase + segment * Math.PI * 2 / segments;
-      vertices.push([Math.cos(longitude) * ringRadius, y, Math.sin(longitude) * ringRadius]);
-    }
-  }
-  const bottom = vertices.push([0, -1, 0]) - 1;
+  const vertices = [];
   const faces = [];
-  for (let segment = 0; segment < segments; segment++) {
-    faces.push([0, 1 + segment, 1 + (segment + 1) % segments]);
-  }
-  for (let ring = 0; ring < ringCount - 1; ring++) {
-    const current = 1 + ring * segments;
-    const next = current + segments;
-    for (let segment = 0; segment < segments; segment++) {
-      faces.push([current + segment, next + segment, next + (segment + 1) % segments, current + (segment + 1) % segments]);
+  const ringSpecs = [
+    { y: .91, count: 6 },
+    { y: .68, count: 14 },
+    { y: .45, count: 14 },
+    { y: .22, count: 14 },
+    { y: -.22, count: 14 },
+    { y: -.45, count: 14 },
+    { y: -.68, count: 14 },
+    { y: -.91, count: 6 },
+  ];
+  const rings = ringSpecs.map(({ y, count }) => {
+    const radius = Math.sqrt(1 - y * y);
+    return Array.from({ length: count }, (_, index) => {
+      const angle = -Math.PI / 2 + index * Math.PI * 2 / count;
+      return vertices.push([Math.cos(angle) * radius, y, Math.sin(angle) * radius]) - 1;
+    });
+  });
+
+  const bridge = (upper, lower) => {
+    if (upper.length === lower.length) {
+      for (let index = 0; index < upper.length; index++) {
+        faces.push([upper[index], lower[index], lower[(index + 1) % lower.length], upper[(index + 1) % upper.length]]);
+      }
+      return;
     }
-  }
-  const lastRing = 1 + (ringCount - 1) * segments;
-  for (let segment = 0; segment < segments; segment++) {
-    faces.push([bottom, lastRing + (segment + 1) % segments, lastRing + segment]);
-  }
+    const fine = upper.length > lower.length ? upper : lower;
+    const coarse = upper.length > lower.length ? lower : upper;
+    const upperIsFine = upper.length > lower.length;
+    for (let index = 0; index < fine.length; index++) {
+      const next = (index + 1) % fine.length;
+      const coarseIndex = Math.floor(index * coarse.length / fine.length);
+      const coarseNext = Math.floor((index + 1) * coarse.length / fine.length) % coarse.length;
+      const face = upperIsFine
+        ? [fine[index], coarse[coarseIndex], ...(coarseNext === coarseIndex ? [] : [coarse[coarseNext]]), fine[next]]
+        : [coarse[coarseIndex], fine[index], fine[next], ...(coarseNext === coarseIndex ? [] : [coarse[coarseNext]])];
+      faces.push(face);
+    }
+  };
+
+  // Results 1 and 100 map to the two six-sided polar caps.
+  faces.push([...rings[0]].reverse());
+  for (let ring = 0; ring < rings.length - 1; ring++) bridge(rings[ring], rings[ring + 1]);
+  faces.push([...rings[rings.length - 1]]);
+  if (faces.length !== 100) throw new Error("d100 mesh must contain exactly 100 faces");
   return { vertices, faces, radius: 1 };
 }
 
 function makeD10() {
-  const vertices = [[0, 1.46, 0], [0, -1.46, 0]];
+  const poleLength = 1.46;
+  const equatorRadius = .95;
+  const equatorRise = .18;
+  const vertices = [[0, poleLength, 0], [0, -poleLength, 0]];
   for (let index = 0; index < 5; index++) {
     const lowAngle = index * Math.PI * 2 / 5;
     const highAngle = lowAngle + Math.PI / 5;
-    vertices.push([Math.cos(lowAngle) * .95, -.18, Math.sin(lowAngle) * .95]);
-    vertices.push([Math.cos(highAngle) * .95, .18, Math.sin(highAngle) * .95]);
+    vertices.push([Math.cos(lowAngle) * equatorRadius, -equatorRise, Math.sin(lowAngle) * equatorRadius]);
+    vertices.push([Math.cos(highAngle) * equatorRadius, equatorRise, Math.sin(highAngle) * equatorRadius]);
   }
   const sortedFace = (indices, normal) => {
     const reference = normalize(cross(normal, Math.abs(normal[1]) < .9 ? [0, 1, 0] : [1, 0, 0]));
@@ -157,7 +174,7 @@ function makeD10() {
     faces.push(sortedFace([0, high, low, previousHigh], [Math.cos(topAngle), .62, Math.sin(topAngle)]));
     faces.push(sortedFace([1, nextLow, high, low], [Math.cos(bottomAngle), -.62, Math.sin(bottomAngle)]));
   }
-  return { vertices, faces, radius: 1.47 };
+  return { vertices, faces, radius: poleLength };
 }
 
 const dieMeshes = {
